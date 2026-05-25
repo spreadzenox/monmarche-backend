@@ -49,11 +49,18 @@ async def lifespan(_: FastAPI):
             await scheduler_task
 
 
+_settings = get_settings()
+_docs_url = None if _settings.app_env == "production" else "/docs"
+_openapi_url = None if _settings.app_env == "production" else "/openapi.json"
+
 app = FastAPI(
     title="Mon Marché Meal Planner API",
     description="Backend for recipe selection, ingredient consolidation, and cart preparation.",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=_docs_url,
+    redoc_url=None,
+    openapi_url=_openapi_url,
 )
 
 app.include_router(health.router)
