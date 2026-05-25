@@ -1,5 +1,7 @@
 """Recipe API schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -14,3 +16,11 @@ class RecipeSummary(BaseModel):
 
 class RecipeDetail(RecipeSummary):
     raw_content: str = ""
+
+
+class RecipeCacheStatus(BaseModel):
+    status: str
+    recipe_count: int
+    last_synced_at: datetime | None = None
+    sync_in_progress: bool = False
+    error_message: str | None = None

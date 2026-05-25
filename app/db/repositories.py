@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Order, OrderItem, ProductMapping
+from app.db.models import CachedRecipe, Order, OrderItem, ProductMapping
 
 
 class ProductMappingRepository:
@@ -94,3 +94,28 @@ class OrderItemRepository:
 
     def list_by_order_id(self, order_id: str) -> list[OrderItem]:
         return self.db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+
+
+class CachedRecipeRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def list_all(self) -> list[CachedRecipe]:
+        return self.db.query(CachedRecipe).order_by(CachedRecipe.name).all()
+
+    def get_by_id(self, notion_page_id: str) -> CachedRecipe | None:
+        page_id = notion_page_id.replace("-", "")
+        return self.db.query(CachedRecipe).filter(CachedRecipe.notion_page_id == page_id).first()
+
+    def count(self) -> int:
+        return self.db.query(CachedRecipe).count()
+
+    def latest_synced_at(self):
+        from sqlalchemy import func
+
+        return self.db.query(func.max(CachedRecipe.synced_at)).scalar()
+
+    def replace_all(self, recipes: list[CachedRecipe]) -> None:
+        self.db.query(CachedRecipe).delete()
+        self.db.add_all(recipes)
+        self.db.commit()

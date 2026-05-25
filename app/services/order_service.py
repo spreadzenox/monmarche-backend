@@ -21,7 +21,8 @@ from app.schemas.order import (
 from app.services.ingredient_service import IngredientService
 from app.services.mapping_service import MappingService
 from app.services.monmarche_bot import MonMarcheBot, MonMarcheBotError
-from app.services.notion_service import NotionService, NotionServiceError
+from app.services.notion_service import NotionServiceError
+from app.services.recipe_cache_service import RecipeCacheService
 from app.services.recipe_parser_service import RecipeParserService
 
 logger = logging.getLogger(__name__)
@@ -37,17 +38,14 @@ class OrderService:
         self._mapping = MappingService(db)
 
     def preview_order(self, payload: OrderPreviewRequest) -> OrderPreviewResponse:
-        try:
-            notion = NotionService()
-        except NotionServiceError as exc:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        cache = RecipeCacheService(self._db)
 
         scaled_groups: list = []
         all_uncertain = []
 
         for recipe_id in payload.recipe_ids:
             try:
-                recipe = notion.get_recipe(recipe_id)
+                recipe = cache.get_recipe(recipe_id)
             except NotionServiceError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

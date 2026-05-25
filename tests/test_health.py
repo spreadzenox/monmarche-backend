@@ -12,3 +12,8 @@ def test_health_is_public(client):
 def test_recipes_requires_auth(client):
     response = client.get("/recipes")
     assert response.status_code == 401
+
+
+def test_recipes_with_session(auth_client):
+    response = auth_client.get("/recipes")
+    assert response.status_code in {200, 503}

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.core.security import verify_api_token
+from app.core.security import require_session
 from app.schemas.order import (
     OrderPreviewRequest,
     OrderPreviewResponse,
@@ -14,7 +14,7 @@ from app.schemas.order import (
 )
 from app.services.order_service import OrderService
 
-router = APIRouter(prefix="/orders", tags=["orders"], dependencies=[Depends(verify_api_token)])
+router = APIRouter(prefix="/orders", tags=["orders"], dependencies=[Depends(require_session)])
 
 
 @router.post("/preview", response_model=OrderPreviewResponse)

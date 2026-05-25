@@ -3,12 +3,12 @@
 from fastapi import APIRouter, Depends
 
 from app.core.config import get_settings
-from app.core.security import verify_api_token
+from app.core.security import require_session
 
 router = APIRouter(
     prefix="/monmarche",
     tags=["monmarche"],
-    dependencies=[Depends(verify_api_token)],
+    dependencies=[Depends(require_session)],
 )
 
 

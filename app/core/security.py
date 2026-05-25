@@ -1,26 +1,34 @@
-"""API authentication helpers."""
+"""Authentication helpers."""
 
-from fastapi import HTTPException, Security, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_db
 from app.core.config import get_settings
+from app.services.auth_service import AuthService
 
-_bearer_scheme = HTTPBearer(auto_error=False)
 
-
-def verify_api_token(
-    credentials: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
-) -> None:
-    """Verify Bearer token when API_AUTH_TOKEN is configured."""
+def require_session(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> str:
+    """Require a valid browser session cookie."""
     settings = get_settings()
-    expected_token = settings.api_auth_token
+    if not settings.auth_enabled:
+        return "anonymous"
 
-    if not expected_token:
-        return
-
-    if credentials is None or credentials.credentials != expected_token:
+    token = request.cookies.get(settings.session_cookie_name)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API authentication token",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Connexion requise.",
         )
+
+    username = AuthService(db).validate_session(token)
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expirée.",
+        )
+
+    return username

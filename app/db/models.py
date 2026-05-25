@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -70,3 +70,26 @@ class OrderItem(Base):
     )
 
     order: Mapped["Order"] = relationship("Order", back_populates="items")
+
+
+class CachedRecipe(Base):
+    __tablename__ = "cached_recipes"
+
+    notion_page_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512), index=True)
+    status: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    rating: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    servings: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    raw_content: Mapped[str] = mapped_column(Text, default="")
+    synced_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(128), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

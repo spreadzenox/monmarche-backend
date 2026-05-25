@@ -33,10 +33,26 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     api_auth_token: str = ""
+    auth_htpasswd_path: str = "/etc/monmarche/htpasswd"
+    session_cookie_name: str = "mm_session"
+    session_max_age_seconds: int = 7 * 24 * 3600
+    recipes_cache_refresh_interval_seconds: int = 3600
 
     @property
     def notion_configured(self) -> bool:
         return bool(self.notion_token and self.notion_recipes_database_id)
+
+    @property
+    def auth_htpasswd_file(self) -> Path:
+        return Path(self.auth_htpasswd_path)
+
+    @property
+    def auth_enabled(self) -> bool:
+        return self.auth_htpasswd_file.is_file()
+
+    @property
+    def session_cookie_secure(self) -> bool:
+        return self.app_env != "dev"
 
     @property
     def monmarche_storage_state_file(self) -> Path:

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.core.security import verify_api_token
+from app.core.security import require_session
 from app.schemas.mapping import (
     ProductMappingCreate,
     ProductMappingResponse,
@@ -12,7 +12,7 @@ from app.schemas.mapping import (
 )
 from app.services.mapping_service import MappingService
 
-router = APIRouter(prefix="/mappings", tags=["mappings"], dependencies=[Depends(verify_api_token)])
+router = APIRouter(prefix="/mappings", tags=["mappings"], dependencies=[Depends(require_session)])
 
 
 @router.get("", response_model=list[ProductMappingResponse])

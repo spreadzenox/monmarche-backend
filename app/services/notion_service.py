@@ -13,6 +13,8 @@ from app.schemas.recipe import RecipeDetail, RecipeSummary
 
 logger = logging.getLogger(__name__)
 
+_UNSUPPORTED_CHILD_BLOCK_TYPES = frozenset({"ai_block"})
+
 
 class NotionServiceError(Exception):
     """Raised when Notion integration fails."""
@@ -35,10 +37,31 @@ class NotionService:
         self._database_id = settings.notion_recipes_database_id.replace("-", "")
         self._client = Client(auth=settings.notion_token)
         self._props = NotionPropertyNames()
+        self._data_source_id: str | None = None
+
+    def _get_data_source_id(self) -> str:
+        if self._data_source_id:
+            return self._data_source_id
+
+        try:
+            database = self._client.databases.retrieve(database_id=self._database_id)
+        except APIResponseError as exc:
+            raise NotionServiceError(
+                f"Unable to access Notion recipes database: {exc.body or exc}"
+            ) from exc
+
+        data_sources = database.get("data_sources") or []
+        if not data_sources:
+            raise NotionServiceError(
+                f"No data source found for Notion database '{self._database_id}'."
+            )
+
+        self._data_source_id = data_sources[0]["id"].replace("-", "")
+        return self._data_source_id
 
     def list_recipes(self) -> list[RecipeSummary]:
         try:
-            pages = self._query_all_pages(self._database_id)
+            pages = self._query_all_pages()
         except APIResponseError as exc:
             raise NotionServiceError(
                 f"Unable to access Notion recipes database: {exc.body or exc}"
@@ -98,6 +121,9 @@ class NotionService:
             if not block_type:
                 continue
 
+            if block_type in _UNSUPPORTED_CHILD_BLOCK_TYPES:
+                continue
+
             payload = block.get(block_type, {})
             text = self._rich_text_to_plain(payload.get("rich_text", []))
 
@@ -125,7 +151,7 @@ class NotionService:
                 if text:
                     lines.append(f"{indent}{text}")
 
-            if block.get("has_children"):
+            if block.get("has_children") and block_type not in _UNSUPPORTED_CHILD_BLOCK_TYPES:
                 child_blocks = self._get_child_blocks(block["id"])
                 lines.append(self.blocks_to_text(child_blocks, depth + 1))
 
@@ -134,23 +160,27 @@ class NotionService:
     def _get_child_blocks(self, block_id: str) -> list[dict[str, Any]]:
         blocks: list[dict[str, Any]] = []
         cursor: str | None = None
-        while True:
-            response = self._client.blocks.children.list(
-                block_id=block_id.replace("-", ""),
-                start_cursor=cursor,
-            )
-            blocks.extend(response.get("results", []))
-            if not response.get("has_more"):
-                break
-            cursor = response.get("next_cursor")
+        try:
+            while True:
+                response = self._client.blocks.children.list(
+                    block_id=block_id.replace("-", ""),
+                    start_cursor=cursor,
+                )
+                blocks.extend(response.get("results", []))
+                if not response.get("has_more"):
+                    break
+                cursor = response.get("next_cursor")
+        except APIResponseError as exc:
+            logger.warning("Unable to read child blocks for %s: %s", block_id, exc)
         return blocks
 
-    def _query_all_pages(self, database_id: str) -> list[dict[str, Any]]:
+    def _query_all_pages(self) -> list[dict[str, Any]]:
+        data_source_id = self._get_data_source_id()
         pages: list[dict[str, Any]] = []
         cursor: str | None = None
         while True:
-            response = self._client.databases.query(
-                database_id=database_id,
+            response = self._client.data_sources.query(
+                data_source_id=data_source_id,
                 start_cursor=cursor,
             )
             pages.extend(response.get("results", []))
