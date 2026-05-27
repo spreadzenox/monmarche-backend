@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 
 from app.schemas.ingredient import ParsedIngredient, ParsedRecipe
+from app.services.gemini_recipe_parser_service import GeminiRecipeParserError, GeminiRecipeParserService
+
+logger = logging.getLogger(__name__)
 
 INGREDIENT_SECTION_KEYWORDS = (
     "ingredients",
@@ -22,6 +26,18 @@ INSTRUCTION_SECTION_KEYWORDS = (
     "étapes",
     "methode",
     "méthode",
+)
+
+METADATA_LINE_PATTERN = re.compile(
+    r"^(portions?|preparation|pr[eé]paration|cuisson|temps\s+total|saison\s+id[eé]ale|"
+    r"mois\s+recommand|ingr[eé]dients?\s+[àa]\s+r[eé]utiliser|restes?\s+possibles?|"
+    r"recettes?\s+compatibles?)\b",
+    re.IGNORECASE,
+)
+
+SKIP_LINE_PATTERN = re.compile(
+    r"^(ingr[eé]dients?\s+[àa]\s+r[eé]utiliser|restes?\s+possibles?|recettes?\s+compatibles?)\s*:",
+    re.IGNORECASE,
 )
 
 SERVINGS_PATTERNS = (
@@ -51,27 +67,63 @@ QUANTITY_THEN_NAME = re.compile(
 OPTIONAL_PATTERN = re.compile(r"\b(facultatif|optionnel|au\s+besoin)\b", re.IGNORECASE)
 BULLET_PREFIX = re.compile(r"^[\-\*•·]\s*")
 NUMBERED_PREFIX = re.compile(r"^\d+[\.)]\s*")
+INGREDIENT_LIKE_PATTERN = re.compile(
+    r"^([\-\*•·]\s*|\d+[\.)]\s*)?"
+    r"(\d+(?:[.,]\d+)?|\d+\s*/\s*\d+|une?\s+|quelques?\s+)"
+    r".+",
+    re.IGNORECASE,
+)
 
 
 class RecipeParserService:
     """Extract structured data from free-form recipe page text."""
 
-    def parse(self, content: str) -> ParsedRecipe:
+    def __init__(self) -> None:
+        self._gemini = GeminiRecipeParserService()
+
+    def parse(self, content: str, *, recipe_name: str = "") -> ParsedRecipe:
+        if self._gemini.configured and content.strip():
+            try:
+                return self._gemini.parse(content, recipe_name=recipe_name)
+            except GeminiRecipeParserError as exc:
+                logger.warning("Gemini parsing failed for %r: %s", recipe_name, exc)
+
+        return self._parse_with_regex(content)
+
+    def _parse_with_regex(self, content: str) -> ParsedRecipe:
         lines = [line.strip() for line in content.splitlines()]
         servings = self._detect_servings(content) or 2
 
         ingredient_lines, instruction_lines = self._split_sections(lines)
-        ingredients = [self._parse_ingredient_line(line) for line in ingredient_lines if line.strip()]
-        ingredients = [item for item in ingredients if item.name or item.raw_text]
+        ingredients: list[ParsedIngredient] = []
+        for line in ingredient_lines:
+            if not line.strip() or self._should_skip_line(line):
+                continue
+            parsed = self._parse_ingredient_line(line)
+            if parsed.name or parsed.raw_text:
+                ingredients.append(parsed)
 
         instructions = [line for line in instruction_lines if line.strip()]
         return ParsedRecipe(servings=servings, ingredients=ingredients, instructions=instructions)
+
+    def _should_skip_line(self, line: str) -> bool:
+        cleaned = self._strip_heading_markers(BULLET_PREFIX.sub("", line.strip()))
+        cleaned = NUMBERED_PREFIX.sub("", cleaned).strip()
+        if not cleaned:
+            return True
+        if METADATA_LINE_PATTERN.search(cleaned):
+            return True
+        if SKIP_LINE_PATTERN.match(cleaned):
+            return True
+        if cleaned.endswith(":") and not INGREDIENT_LIKE_PATTERN.match(cleaned):
+            return True
+        return False
 
     def _detect_servings(self, content: str) -> int | None:
         for pattern in SERVINGS_PATTERNS:
             match = pattern.search(content)
             if match:
-                return self._parse_number(match.group(1))
+                return int(self._parse_number(match.group(1)))
         return None
 
     def _split_sections(self, lines: list[str]) -> tuple[list[str], list[str]]:
@@ -105,7 +157,12 @@ class RecipeParserService:
             ingredient_lines = [
                 line
                 for line in lines
-                if line.strip() and not line.strip().startswith("#")
+                if line.strip()
+                and not line.strip().startswith("#")
+                and not self._should_skip_line(line)
+                and INGREDIENT_LIKE_PATTERN.match(
+                    NUMBERED_PREFIX.sub("", BULLET_PREFIX.sub("", line.strip()))
+                )
             ]
 
         return ingredient_lines, instruction_lines

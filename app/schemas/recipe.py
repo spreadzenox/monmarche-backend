@@ -12,6 +12,7 @@ class RecipeSummary(BaseModel):
     rating: str | None = None
     tags: list[str] = Field(default_factory=list)
     servings: int | None = None
+    notion_last_edited_at: datetime | None = None
 
 
 class RecipeDetail(RecipeSummary):

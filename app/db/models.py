@@ -82,6 +82,9 @@ class CachedRecipe(Base):
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     servings: Mapped[int | None] = mapped_column(Integer, nullable=True)
     raw_content: Mapped[str] = mapped_column(Text, default="")
+    raw_content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    parsed_recipe_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    notion_last_edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     synced_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
 

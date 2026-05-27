@@ -5,6 +5,7 @@ from pathlib import Path
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["NOTION_TOKEN"] = ""
 os.environ["NOTION_RECIPES_DATABASE_ID"] = ""
+os.environ["GEMINI_API_KEY"] = ""
 os.environ["APP_ENV"] = "dev"
 
 TEST_HTPASSWD = Path("/tmp/monmarche-test.htpasswd")

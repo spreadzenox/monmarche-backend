@@ -8,6 +8,8 @@ from typing import Any
 from notion_client import Client
 from notion_client.errors import APIResponseError
 
+from datetime import UTC, datetime
+
 from app.core.config import NotionPropertyNames, get_settings
 from app.schemas.recipe import RecipeDetail, RecipeSummary
 
@@ -206,6 +208,7 @@ class NotionService:
             rating=self._extract_select(properties, self._props.RATING),
             tags=self._extract_multi_select(properties, self._props.TAGS),
             servings=None,
+            notion_last_edited_at=self._parse_notion_datetime(page.get("last_edited_time")),
         )
 
     def _extract_title(self, properties: dict[str, Any], prop_name: str) -> str | None:
@@ -241,6 +244,19 @@ class NotionService:
         if not prop or prop.get("type") != "multi_select":
             return []
         return [item.get("name", "") for item in prop.get("multi_select", []) if item.get("name")]
+
+    @staticmethod
+    def _parse_notion_datetime(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        normalized = value.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     @staticmethod
     def _rich_text_to_plain(rich_text: list[dict[str, Any]]) -> str:

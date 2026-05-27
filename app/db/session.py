@@ -30,6 +30,25 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
+    from sqlalchemy import text
+
     from app.db import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _migrate_schema()
+
+
+def _migrate_schema() -> None:
+    from sqlalchemy import text
+
+    migrations = [
+        "ALTER TABLE cached_recipes ADD COLUMN parsed_recipe_json JSON",
+        "ALTER TABLE cached_recipes ADD COLUMN raw_content_hash VARCHAR(64)",
+        "ALTER TABLE cached_recipes ADD COLUMN notion_last_edited_at DATETIME",
+    ]
+    with engine.begin() as conn:
+        for statement in migrations:
+            try:
+                conn.execute(text(statement))
+            except Exception:
+                pass

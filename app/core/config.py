@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     session_max_age_seconds: int = 7 * 24 * 3600
     recipes_cache_refresh_interval_seconds: int = 3600
 
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+
+    @property
+    def gemini_configured(self) -> bool:
+        return bool(self.gemini_api_key)
+
     @property
     def notion_configured(self) -> bool:
         return bool(self.notion_token and self.notion_recipes_database_id)
